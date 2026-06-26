@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aviation Clock - Radar List Compact Edition</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    background-color: #243543;
+    color: #ffffff;
+    font-family: 'Arial Black', 'Helvetica Neue', Arial, sans-serif;
+    margin: 0;
+    padding: 40px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+    position: relative;
+  }
+  
+  /* 右下の黄色い斜めアクセントすごくかっこいい */
+  body::after {
+    content: ""; position: absolute; bottom: 0; right: 0; width: 45vw; height: 25vh;
+    background-color: #fde46d; clip-path: polygon(100% 0, 100% 100%, 0 100%); z-index: 1; pointer-events: none;
+  }
+  
+  /* フライト一覧エリア：UIをコンパクト化 */
+  .radar-list-container {
+    position: absolute;
+    bottom: 15px;
+    right: 25px;
+    width: 32vw;
+    height: 10vh;
+    z-index: 2;
+    color: #243543;
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-end;
+  }
+  .radar-list-title {
+    font-size: 0.9rem; /* 小さくして精密感をage*/
+    font-weight: 900;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    opacity: 0.8;
+  }
+  .radar-tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px; /* 間隔狭め */
+    width: 100%;
+  }
+  .radar-tag {
+    background-color: rgba(36, 53, 67, 0.12);
+    padding: 3px 7px; /* パディングをタイトに */
+    border-radius: 3px;
+    font-size: 0.95rem; /* UIサイズを小く */
+    font-weight: 900;
+    white-space: nowrap;
+    animation: pulse 2s infinite ease-in-out;
+  }
+  /* 最寄り機体 */
+  .radar-tag.closest {
+    background-color: rgba(36, 53, 67, 0.25);
+    border: 1.5px solid #243543;
+  }
+
+  @keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+  }
+
+  .clock-section { display: flex; align-items: center; justify-content: center; border-bottom: 4px solid #ffffff; padding-bottom: 20px; width: 100%; flex: 4; }
+  .clock-left { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; width: 15%; }
+  .summer-text { color: #fde46d; font-size: 2.5rem; font-weight: 900; visibility: hidden; line-height: 1; margin-bottom: 10px; }
+  .ampm-text { font-size: 6rem; font-weight: 900; line-height: 1; }
+  .time-text { color: #fde46d; font-size: 16rem; font-weight: 900; line-height: 0.85; text-align: center; flex: 1; letter-spacing: -2px; }
+  .clock-right { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; width: 25%; padding-left: 20px; }
+  .sec-text { font-size: 7rem; font-weight: 900; line-height: 1; }
+  .date-text { font-size: 3.2rem; font-weight: 900; line-height: 1; margin-top: 15px; white-space: nowrap; }
+  
+  .aviation-section { display: flex; width: 100%; flex: 5; margin-top: 30px; position: relative; z-index: 2; }
+  .info-box { flex: 1; display: flex; flex-direction: column; }
+  .info-box.left { border-right: 4px solid #ffffff; padding-right: 40px; }
+  .info-box.right { padding-left: 40px; }
+  .info-header { background-color: #fde46d; color: #243543; font-size: 4rem; font-weight: 900; text-align: left; padding: 10px 20px; margin-bottom: 25px; width: 100%; letter-spacing: 2px; }
+  .info-list { list-style: none; padding: 0; margin: 0; font-size: 2rem; line-height: 1.8; font-weight: 900; }
+  .info-list li { white-space: nowrap; }
+  .info-list span { font-weight: bold; color: #ffffff; margin-left: 10px; }
+  #status-msg { font-size: 1.2rem; color: #fde46d; position: absolute; bottom: 10px; left: 40px; z-index: 3; }
+</style>
+</head>
+<body>
+
+<div class="clock-section">
+  <div class="clock-left">
+    <div id="summer" class="summer-text">summer</div>
+    <div id="ampm" class="ampm-text">AM</div>
+  </div>
+  <div id="time" class="time-text">00:00</div>
+  <div class="clock-right">
+    <div id="sec" class="sec-text">00</div>
+    <div id="date" class="date-text">DD:MM:YYYY</div>
+  </div>
+</div>
+
+<div class="aviation-section">
+  <div class="info-box left">
+    <div id="callsign" class="info-header">検索中...</div>
+    <ul class="info-list">
+      <li>現在位置(緯度・経度) <span id="position">-- / --</span></li>
+      <li>気圧高度 <span id="alt">--</span> ft</li>
+      <li>機首方位 <span id="track">--</span>°</li>
+      <li>スコークコード <span id="squawk">--</span></li>
+      <li>ICAO hex <span id="icao">--</span></li>
+    </ul>
+  </div>
+  <div class="info-box right">
+    <div id="ac-type" class="info-header">機種・型番</div>
+    <ul class="info-list">
+      <li>航空会社・所有者 <span id="owner">--</span></li>
+      <li>製造番号 <span id="serial">--</span></li>
+    </ul>
+  </div>
+</div>
+
+<div class="radar-list-container">
+  <div class="radar-list-title">TRAFFIC IN AREA (TOP 5)</div>
+  <div id="radar-tags" class="radar-tags"></div>
+</div>
+
+<div id="status-msg">位置情報取得待ち...</div>
+
+<script>
+const GAS_WEBAPP_URL = 'ここにGasのURLをコピペ!!!!!!!!!!!!!!!!!!!!!!';
+
+function updateClock() {
+  const now = new Date();
+  let hours = now.getHours();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12; hours = hours ? hours : 12; 
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year = now.getFullYear();
+  
+  document.getElementById('ampm').innerText = ampm;
+  document.getElementById('time').innerText = `${String(hours).padStart(2, '0')}:${minutes}`;
+  document.getElementById('sec').innerText = seconds;
+  document.getElementById('date').innerText = `${day}:${month}:${year}`;
+  
+  const jan = new Date(year, 0, 1).getTimezoneOffset();
+  const jul = new Date(year, 6, 1).getTimezoneOffset();
+  document.getElementById('summer').style.visibility = Math.max(jan, jul) !== now.getTimezoneOffset() ? 'visible' : 'hidden';
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+function getDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI/180);
+  const dLon = (lon2 - lon1) * (Math.PI/180); 
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * (Math.PI/180)) * Math.cos(lat2 * (Math.PI/180)) * Math.sin(dLon/2) * Math.sin(dLon/2); 
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))); 
+}
+
+async function fetchAviationData() {
+  if (!navigator.geolocation) {
+    document.getElementById('status-msg').innerText = "Geolocation API非対応環境です";
+    return;
+  }
+  if (GAS_WEBAPP_URL.includes('GasのURLを入力')) {
+    document.getElementById('status-msg').innerText = "GASのURLを設定してください";
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(async (position) => {
+    const myLat = position.coords.latitude;
+    const myLon = position.coords.longitude;
+    let aircrafts = [];
+    const radiusSteps = [20, 50, 100, 150, 200, 250]; 
+    let currentRadius = radiusSteps[0];
+    
+    document.getElementById('status-msg').innerText = `GAS経由でリクエスト送信中...`;
+
+    for (const radius of radiusSteps) {
+      currentRadius = radius;
+      document.getElementById('status-msg').innerText = `検索範囲拡大中(GAS中継): 半径 ${radius} NM...`;
+      try {
+        const res = await fetch(`${GAS_WEBAPP_URL}?lat=${myLat}&lon=${myLon}&radius=${radius}`);
+        if (!res.ok) throw new Error(`HTTPエラー: ${res.status}`);
+        
+        const data = await res.json();
+        if (data.ac && data.ac.length > 0) {
+          aircrafts = data.ac;
+          break;
+        }
+      } catch (e) {
+        console.error(`半径 ${radius} NM エラー:`, e);
+      }
+    }
+    
+    if (aircrafts.length === 0) {
+      document.getElementById('callsign').innerText = "機体が見つからないです";
+      document.getElementById('status-msg').innerText = `半径 250 NM 以内に捉えた機体はないです`;
+      document.getElementById('radar-tags').innerHTML = '';
+      return;
+    }
+    
+    aircrafts.forEach(ac => {
+      if (ac.lat && ac.lon) {
+        ac.computedDistance = getDistance(myLat, myLon, ac.lat, ac.lon);
+      } else {
+        ac.computedDistance = Infinity;
+      }
+    });
+    aircrafts.sort((a, b) => a.computedDistance - b.computedDistance);
+    
+    let closestAc = aircrafts[0];
+    
+    if (!closestAc || closestAc.computedDistance === Infinity) {
+      document.getElementById('callsign').innerText = "有効な位置データなし";
+      return;
+    }
+    
+    // 【修正】近距離の上位5機に厳選してスッキリ収める
+    const tagsContainer = document.getElementById('radar-tags');
+    tagsContainer.innerHTML = '';
+    
+    const displayAircrafts = aircrafts.slice(0, 5);
+    displayAircrafts.forEach((ac, index) => {
+      const flightName = ac.flight ? ac.flight.trim() : (ac.hex ? ac.hex.toUpperCase() : 'UNKNOWN');
+      const tag = document.createElement('div');
+      tag.className = 'radar-tag';
+      if (index === 0) tag.className += ' closest';
+      tag.innerText = flightName;
+      tagsContainer.appendChild(tag);
+    });
+    
+    document.getElementById('callsign').innerText = closestAc.flight ? closestAc.flight.trim() : 'UNKNOWN';
+    document.getElementById('position').innerText = `${closestAc.lat.toFixed(4)} / ${closestAc.lon.toFixed(4)}`;
+    document.getElementById('alt').innerText = closestAc.alt_baro || 'N/A';
+    document.getElementById('track').innerText = closestAc.track || 'N/A';
+    document.getElementById('squawk').innerText = closestAc.squawk || 'N/A';
+    document.getElementById('icao').innerText = closestAc.hex || 'N/A';
+    
+    document.getElementById('status-msg').innerText = `最寄りの機体を捕捉（検索半径: ${currentRadius} NM / 総数: ${aircrafts.length}機）`;
+    
+    if (closestAc.hex) {
+      try {
+        const hexRes = await fetch(`${GAS_WEBAPP_URL}?hex=${closestAc.hex}`);
+        if (hexRes.ok) {
+          const hexData = await hexRes.json();
+          document.getElementById('ac-type').innerText = hexData.ICAOTypeCode || hexData.Type || '情報なし';
+          document.getElementById('owner').innerText = hexData.RegisteredOwners || hexData.OperatorFlagCode || '情報なし';
+          document.getElementById('serial').innerText = hexData.SerialNo || '情報なし';
+        } else {
+          resetDetails();
+        }
+      } catch(e) {
+        console.error("Mode-S APIエラー:", e);
+        resetDetails();
+      }
+    }
+  }, (error) => {
+    document.getElementById('status-msg').innerText = `位置情報の取得に失敗しました (Error Code: ${error.code})`;
+  }, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+function resetDetails() {
+  document.getElementById('ac-type').innerText = "情報なし";
+  document.getElementById('owner').innerText = "情報なし";
+  document.getElementById('serial').innerText = "情報なし";
+}
+
+fetchAviationData();
+setInterval(fetchAviationData, 300000);
+</script>
+</body>
+</html>
